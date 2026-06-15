@@ -195,6 +195,13 @@ We are constantly evolving the platform. Here are the features currently in deve
    - [http://localhost:3000/api/seed](http://localhost:3000/api/seed) — dummy products
    - [http://localhost:3000/api/seed-categories](http://localhost:3000/api/seed-categories) — categories
 
+7. **(Optional) Promote a user to Super Admin:**
+   Register an account through the app first, then grant it the **Super Admin** role
+   directly in the database (replace the email with your own):
+   ```bash
+   docker exec -it tech-store-mongo mongosh tech-store --eval 'db.users.updateOne({email:"example@gmail.com"},{$set:{role:"super-admin"}})'
+   ```
+
 > **Tip:** The app should be reachable at `http://localhost:3000`. You can confirm the
 > database connection is healthy by opening `http://localhost:3000/api/products` —
 > it returns `200` once MongoDB is reachable.

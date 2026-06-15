@@ -1,0 +1,1253 @@
+openapi: 3.0.3
+
+info:
+  title: Tech-Store API
+  version: 0.1.0
+  description: >
+    REST API for the Tech-Store e-commerce platform (Next.js App Router, MongoDB/Mongoose,
+    NextAuth credentials auth, Stripe payments).
+
+
+    **Authentication.** Most write endpoints require a logged-in NextAuth session. NextAuth
+    stores the session in an HTTP-only cookie (`next-auth.session-token`, or
+    `__Secure-next-auth.session-token` over HTTPS) that the browser sends automatically.
+    There is no bearer-token scheme. Role-gated endpoints additionally require the session
+    user to have one of the listed roles (`user`, `manager`, `admin`, `super-admin`).
+
+
+    **Note.** This document was reverse-engineered from the route handlers in `app/api/**`
+    and the Mongoose models in `models/**`. It does not modify any application code.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://your-domain.com
+    description: Production (replace with your deployed URL)
+
+tags:
+  - name: Auth
+    description: Registration, email/OTP verification, password reset, and NextAuth sign-in.
+  - name: Products
+    description: Product catalog (browse, manage, reviews).
+  - name: Categories
+    description: Product categories and sub-categories.
+  - name: Orders
+    description: Order creation and management.
+  - name: User
+    description: Authenticated user profile and saved addresses.
+  - name: Settings
+    description: Public store settings and admin store configuration.
+  - name: Admin
+    description: Super-admin user management.
+  - name: Payment
+    description: Stripe payment intent and webhook.
+  - name: Utility
+    description: Seeding and data-maintenance endpoints.
+
+paths:
+  # ---------------------------------------------------------------- Auth
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account (sends email OTP)
+      description: >
+        Creates a pending registration and emails a 6-digit OTP valid for 15 minutes.
+        The real user account is only created after the OTP is verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, example: Jane Doe }
+                email: { type: string, format: email, example: jane@example.com }
+                password: { type: string, format: password, example: "S3cret!" }
+      responses:
+        "201":
+          description: Registration accepted; OTP emailed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  email: { type: string, format: email }
+        "400":
+          description: User already exists.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Verify the registration OTP
+      description: Confirms the OTP, promotes the pending registration to a real user, and removes the pending record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email: { type: string, format: email }
+                otp: { type: string, example: "123456" }
+      responses:
+        "200":
+          description: Email verified.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: Missing fields, invalid code, or expired code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "404":
+          description: No pending registration found for this email.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/auth/resend-otp:
+    post:
+      tags: [Auth]
+      summary: Resend a new registration OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200":
+          description: A new OTP was sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: Missing email, or email already verified/registered.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "404":
+          description: No pending registration found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password-reset OTP
+      description: >
+        Emails a 6-digit reset OTP (valid 15 minutes) if an account exists. For security the
+        response does not reveal whether the email is registered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200":
+          description: Reset code sent (or generic message if account does not exist).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: Email is required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using the OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp, newPassword]
+              properties:
+                email: { type: string, format: email }
+                otp: { type: string, example: "123456" }
+                newPassword: { type: string, format: password }
+      responses:
+        "200":
+          description: Password reset successful.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: Missing fields, or invalid/expired reset code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/auth/{nextauth}:
+    parameters:
+      - name: nextauth
+        in: path
+        required: true
+        description: >
+          NextAuth catch-all segment. Common values: `session`, `csrf`, `callback/credentials`,
+          `signin`, `signout`, `providers`.
+        schema: { type: string, example: "callback/credentials" }
+    get:
+      tags: [Auth]
+      summary: NextAuth handler (GET)
+      description: >
+        Handled by NextAuth (`app/api/auth/[...nextauth]/route.ts`). Used for `session`, `csrf`,
+        `providers`, sign-in/out pages, etc. Sign-in uses the Credentials provider (email + password).
+      responses:
+        "200":
+          description: NextAuth response (shape depends on the sub-route, e.g. the current session).
+    post:
+      tags: [Auth]
+      summary: NextAuth handler (POST) — credentials sign-in / sign-out
+      description: >
+        Credentials sign-in posts to `/api/auth/callback/credentials` with `email`, `password`,
+        and a CSRF token. On success NextAuth sets the session cookie. Failures throw messages
+        such as "No user found with this email", "Incorrect password", or
+        "Account not verified. Please register again."
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                csrfToken: { type: string }
+      responses:
+        "200":
+          description: Sign-in/out processed (NextAuth sets/clears the session cookie).
+
+  # ---------------------------------------------------------------- Products
+  /api/products:
+    get:
+      tags: [Products]
+      summary: List products (filter, search, sort, paginate)
+      parameters:
+        - name: category
+          in: query
+          description: Category ObjectId. `All` (or omitted) returns every category. Sub-categories are included automatically.
+          schema: { type: string }
+        - name: search
+          in: query
+          description: Case-insensitive substring match on product name.
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 12, minimum: 1 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [newest, price-asc, price-desc], default: newest }
+        - name: minPrice
+          in: query
+          schema: { type: number }
+        - name: maxPrice
+          in: query
+          schema: { type: number }
+      responses:
+        "200":
+          description: Paginated product list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+                  totalPages: { type: integer }
+                  currentPage: { type: integer }
+                  totalProducts: { type: integer }
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Products]
+      summary: Create a product
+      description: Requires a session with role `super-admin`, `admin`, or `manager`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Created product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/products/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [Products]
+      summary: Get a product by id
+      responses:
+        "200":
+          description: Product (with populated category).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    patch:
+      tags: [Products]
+      summary: Update a product
+      description: Requires role `super-admin`, `admin`, or `manager`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "200":
+          description: Updated product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      description: Requires role `super-admin` or `admin`.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/products/{id}/reviews:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    post:
+      tags: [Products]
+      summary: Add a review to a product
+      description: Requires a logged-in session. One review per email per product.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, comment]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string }
+      responses:
+        "200":
+          description: Review added; returns the updated product.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  product: { $ref: "#/components/schemas/Product" }
+        "400":
+          description: Missing rating/comment, or already reviewed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- Categories
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: List categories with product counts
+      parameters:
+        - name: parentsOnly
+          in: query
+          description: When `true`, returns only top-level (parent) categories.
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Categories with aggregated product counts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CategoryWithCount" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Categories]
+      summary: Create a category
+      description: Requires role `admin` or `super-admin`. The slug is generated from the name.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                icon: { type: string, description: "ImgBB URL or Lucide icon name. Defaults to 'LayoutGrid'." }
+                parent: { type: string, nullable: true, description: "Parent category ObjectId, or null." }
+      responses:
+        "201":
+          description: Created category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400":
+          description: Name required, or a category with that name already exists.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Categories]
+      summary: Update a category
+      description: Requires role `admin` or `super-admin`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string, description: "Category ObjectId to update." }
+                name: { type: string }
+                icon: { type: string }
+                parent: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Updated category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400":
+          description: ID is required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Categories]
+      summary: Delete a category
+      description: >
+        Requires role `admin` or `super-admin`. Fails if the category still has associated
+        products or sub-categories.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: ID required, or category has associated products/sub-categories.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- Orders
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      description: >
+        Requires a session. Admins/managers (`super-admin`, `admin`, `manager`) see all orders;
+        regular users see only their own. Sorted newest first.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Orders array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Order" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Orders]
+      summary: Create an order
+      description: >
+        Works for guests and logged-in users. If a session exists, the order is linked to that user.
+        Status defaults to `Pending` for COD, otherwise `Awaiting Payment`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: Created order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/orders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [Orders]
+      summary: Get an order by id
+      description: Returns the order with the user's name and email populated.
+      responses:
+        "200":
+          description: Order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    patch:
+      tags: [Orders]
+      summary: Update an order
+      description: >
+        Requires a session. Any owner/admin may set `transactionId`. Only admins/managers
+        (`super-admin`, `admin`, `manager`) may change `status` and `paymentStatus`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transactionId: { type: string }
+                status: { $ref: "#/components/schemas/OrderStatus" }
+                paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+      responses:
+        "200":
+          description: Updated order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- User
+  /api/user/profile:
+    put:
+      tags: [User]
+      summary: Update the current user's profile
+      description: >
+        Requires a session. Update name and/or image. To change the password, provide both
+        `currentPassword` and `newPassword`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                image: { type: string, description: "Avatar URL." }
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password }
+      responses:
+        "200":
+          description: Updated profile (password omitted).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  user: { $ref: "#/components/schemas/User" }
+        "400":
+          description: Current password required/incorrect.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/user/addresses:
+    get:
+      tags: [User]
+      summary: List the current user's saved addresses
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Address array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Address" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [User]
+      summary: Add or update a saved address
+      description: Provide `id` to update an existing address; omit it to add a new one. Setting `isDefault` unsets the others.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                id: { type: string, nullable: true, description: "Address subdocument _id to update, or omit to add." }
+                address: { $ref: "#/components/schemas/Address" }
+      responses:
+        "200":
+          description: Updated address list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  addresses:
+                    type: array
+                    items: { $ref: "#/components/schemas/Address" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [User]
+      summary: Delete a saved address
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Address subdocument _id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "400":
+          description: ID required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- Settings
+  /api/settings:
+    get:
+      tags: [Settings]
+      summary: Get public store settings
+      description: Returns a public subset of the store settings (no secret keys). Creates defaults if none exist.
+      responses:
+        "200":
+          description: Public settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicSettings" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/admin/settings:
+    get:
+      tags: [Settings]
+      summary: Get full store settings (admin)
+      description: Returns the complete settings document including payment configuration. Creates defaults if none exist.
+      responses:
+        "200":
+          description: Full settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Settings]
+      summary: Update store settings (admin)
+      description: Requires role `super-admin` or `admin`. Upserts the singleton settings document.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Settings" }
+      responses:
+        "200":
+          description: Updated settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- Admin users
+  /api/admin/users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    patch:
+      tags: [Admin]
+      summary: Change a user's role
+      description: Requires role `super-admin`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/UserRole" }
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Admin]
+      summary: Delete a user
+      description: Requires role `super-admin`.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  # ---------------------------------------------------------------- Payment
+  /api/payment/create-intent:
+    post:
+      tags: [Payment]
+      summary: Create a Stripe PaymentIntent for an order
+      description: Returns the PaymentIntent client secret (amount derived from the order total).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId: { type: string }
+      responses:
+        "200":
+          description: Client secret for Stripe.js.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientSecret: { type: string }
+        "400":
+          description: Order ID is required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          description: Stripe not configured, or internal error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/webhook/stripe:
+    post:
+      tags: [Payment]
+      summary: Stripe webhook receiver
+      description: >
+        Receives Stripe events (verified via the `stripe-signature` header). On
+        `payment_intent.succeeded` the order is marked Processing/Paid; on
+        `payment_intent.payment_failed` the order's paymentStatus is set to Failed.
+        Send raw Stripe event payloads — not called directly by clients.
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe Event object.
+      responses:
+        "200":
+          description: Event received.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+        "400":
+          description: Missing signature or signature verification failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Stripe not configured, or internal error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------- Utility
+  /api/seed:
+    get:
+      tags: [Utility]
+      summary: Seed sample products
+      description: Inserts a fixed set of demo products if the products collection is empty.
+      responses:
+        "200":
+          description: Seeded (or already populated).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/seed-categories:
+    get:
+      tags: [Utility]
+      summary: Repair/migrate product–category data (admin)
+      description: >
+        Requires role `super-admin` or `admin`. Cleans up legacy string categories, creates
+        missing category records, and re-links products to valid category ObjectIds.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Migration summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  obsoleteCategoriesRemoved: { type: integer }
+                  idsCorrected: { type: integer }
+                  labelsMigrated:
+                    type: array
+                    items: { type: string }
+                  productsReassigned: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: >
+        NextAuth session cookie set after a successful credentials sign-in via
+        `/api/auth/callback/credentials`. Over HTTPS the cookie name is
+        `__Secure-next-auth.session-token`. The browser sends it automatically.
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId (24 hex characters).
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F]{24}$"
+        example: "507f1f77bcf86cd799439011"
+
+  responses:
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but lacking the required role.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: "Internal Server Error" }
+
+    MessageError:
+      type: object
+      description: Endpoints variously return a `message` or an `error` string.
+      properties:
+        message: { type: string }
+        error: { type: string }
+
+    UserRole:
+      type: string
+      enum: [user, manager, admin, super-admin]
+
+    OrderStatus:
+      type: string
+      enum: [Pending, Awaiting Payment, Processing, Shipped, Delivered, Cancelled, On Hold]
+
+    PaymentStatus:
+      type: string
+      enum: [Pending, Paid, Failed]
+
+    AddressType:
+      type: string
+      enum: [Home, Office]
+      default: Home
+
+    Review:
+      type: object
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ProductInput:
+      type: object
+      required: [name, description, price, category]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price: { type: number }
+        regularPrice: { type: number }
+        images:
+          type: array
+          items: { type: string }
+        image: { type: string, description: "Legacy single-image field." }
+        category: { type: string, description: "Category ObjectId." }
+        subCategory: { type: string }
+        brand: { type: string }
+        modelName: { type: string }
+        warranty: { type: string }
+        specifications: { type: string }
+        stock: { type: integer, default: 10 }
+
+    Product:
+      allOf:
+        - $ref: "#/components/schemas/ProductInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            category:
+              oneOf:
+                - { type: string, description: "Category ObjectId." }
+                - { $ref: "#/components/schemas/Category" }
+              description: "Plain id, or a populated Category object on GET endpoints."
+            reviews:
+              type: array
+              items: { $ref: "#/components/schemas/Review" }
+            avgRating: { type: number, default: 0 }
+            numReviews: { type: integer, default: 0 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        icon: { type: string, description: "ImgBB URL or Lucide icon name." }
+        parent: { type: string, nullable: true, description: "Parent category ObjectId, or null." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CategoryWithCount:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        icon: { type: string }
+        parent: { type: string, nullable: true }
+        productCount: { type: integer, description: "Direct products plus products in sub-categories." }
+
+    Address:
+      type: object
+      properties:
+        _id: { type: string, readOnly: true }
+        name: { type: string }
+        phone: { type: string }
+        city: { type: string }
+        area: { type: string }
+        address: { type: string }
+        landmark: { type: string }
+        addressType: { $ref: "#/components/schemas/AddressType" }
+        isDefault: { type: boolean, default: false }
+
+    ShippingInfo:
+      type: object
+      required: [name, phone, city, area, address]
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        city: { type: string }
+        area: { type: string }
+        address: { type: string }
+        landmark: { type: string }
+        addressType: { $ref: "#/components/schemas/AddressType" }
+
+    OrderItem:
+      type: object
+      required: [product, name, quantity, price]
+      properties:
+        product: { type: string, description: "Product ObjectId." }
+        name: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+
+    OrderInput:
+      type: object
+      required: [items, totalPrice, shippingInfo]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
+        totalPrice: { type: number }
+        shippingInfo: { $ref: "#/components/schemas/ShippingInfo" }
+        paymentMethod: { type: string, default: cod, example: cod }
+        paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+
+    Order:
+      type: object
+      properties:
+        _id: { type: string }
+        user: { type: string, nullable: true, description: "User ObjectId (null for guest orders); may be populated with name/email on GET by id." }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
+        totalPrice: { type: number }
+        shippingInfo: { $ref: "#/components/schemas/ShippingInfo" }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        paymentMethod: { type: string }
+        paymentStatus: { $ref: "#/components/schemas/PaymentStatus" }
+        transactionId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    User:
+      type: object
+      description: User document. The password field is never returned by the API.
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/UserRole" }
+        image: { type: string }
+        addresses:
+          type: array
+          items: { $ref: "#/components/schemas/Address" }
+        isVerified: { type: boolean, default: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    HeroSlide:
+      type: object
+      properties:
+        badge: { type: string }
+        headlinePrimary: { type: string }
+        headlineSecondary: { type: string }
+        description: { type: string }
+        image: { type: string }
+
+    PublicSettings:
+      type: object
+      description: Public subset returned by GET /api/settings.
+      properties:
+        _id: { type: string }
+        siteName: { type: string }
+        siteLogo: { type: string }
+        activePaymentMethods:
+          type: array
+          items: { type: string, enum: [cod, stripe, sslcommerz, bkash, nagad, rocket] }
+        siteDescription: { type: string }
+        contactEmail: { type: string }
+        footerText: { type: string }
+        bkashNumber: { type: string }
+        nagadNumber: { type: string }
+        rocketNumber: { type: string }
+        paymentInstructions: { type: string }
+        heroBadge: { type: string }
+        heroHeadlinePrimary: { type: string }
+        heroHeadlineSecondary: { type: string }
+        heroDescription: { type: string }
+        heroImage: { type: string }
+
+    Settings:
+      type: object
+      description: Full settings document (admin). Includes Stripe secrets — only ever exposed on admin endpoints.
+      properties:
+        _id: { type: string }
+        siteName: { type: string, default: TechStore }
+        siteLogo: { type: string }
+        siteDescription: { type: string }
+        activePaymentMethods:
+          type: array
+          items: { type: string, enum: [cod, stripe, sslcommerz, bkash, nagad, rocket] }
+        contactEmail: { type: string }
+        footerText: { type: string }
+        bkashNumber: { type: string }
+        nagadNumber: { type: string }
+        rocketNumber: { type: string }
+        stripePublishableKey: { type: string }
+        stripeSecretKey: { type: string }
+        stripeWebhookSecret: { type: string }
+        paymentInstructions: { type: string }
+        heroBadge: { type: string }
+        heroHeadlinePrimary: { type: string }
+        heroHeadlineSecondary: { type: string }
+        heroDescription: { type: string }
+        heroImage: { type: string }
+        heroSlides:
+          type: array
+          items: { $ref: "#/components/schemas/HeroSlide" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

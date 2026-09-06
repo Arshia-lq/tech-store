@@ -134,7 +134,7 @@ export default function ProductTable({ products }: { products: ProductRow[] }) {
                   </td>
 
                   <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                    ৳{product.price.toLocaleString()}
+                    ${product.price.toLocaleString()}
                   </td>
 
                   <td className="px-6 py-4">

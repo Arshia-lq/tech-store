@@ -217,7 +217,7 @@ export default function ProductDetail({ product }: { product: any }) {
 
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600">
-                Price: ৳{product.price?.toLocaleString()}
+                Price: ${product.price?.toLocaleString()}
               </span>
               <span className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600">
                 Stock:{" "}
@@ -267,11 +267,11 @@ export default function ProductDetail({ product }: { product: any }) {
               <div className="relative flex-1 rounded-2xl bg-green-50 p-4">
                 {hasDiscount && (
                   <span className="absolute -top-2 right-3 rounded-full bg-purple-600 px-2.5 py-1 text-[10px] font-bold text-white">
-                    Save: ৳{savings.toLocaleString()}
+                    Save: ${savings.toLocaleString()}
                   </span>
                 )}
                 <p className="text-2xl font-extrabold text-red-500">
-                  ৳{product.price?.toLocaleString()}
+                  ${product.price?.toLocaleString()}
                 </p>
                 <p className="text-xs font-semibold text-gray-500">Special Price</p>
               </div>
@@ -279,7 +279,7 @@ export default function ProductDetail({ product }: { product: any }) {
               {hasDiscount && (
                 <div className="flex-1 rounded-2xl bg-gray-50 p-4">
                   <p className="text-2xl font-extrabold text-gray-400">
-                    ৳{product.regularPrice.toLocaleString()}
+                    ${product.regularPrice.toLocaleString()}
                   </p>
                   <p className="text-xs font-semibold text-gray-400">Regular Price</p>
                 </div>

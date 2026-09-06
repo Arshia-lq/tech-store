@@ -140,7 +140,7 @@ export default function TransactionsView({
               Total Spent
             </p>
             <p className="text-lg font-extrabold text-gray-900">
-              ৳{totalSpent.toLocaleString()}
+              ${totalSpent.toLocaleString()}
             </p>
           </div>
         </div>
@@ -154,14 +154,14 @@ export default function TransactionsView({
               Processing
             </p>
             <p className="text-lg font-extrabold text-gray-900">
-              ৳{processing.toLocaleString()}
+              ${processing.toLocaleString()}
             </p>
           </div>
         </div>
 
         <div
           className="flex items-center gap-4 rounded-3xl bg-white p-5 shadow-sm"
-          title="No refund tracking exists in the schema yet — always ৳0"
+          title="No refund tracking exists in the schema yet — always $0"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500">
             <ShieldAlert size={18} />
@@ -170,7 +170,7 @@ export default function TransactionsView({
             <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
               Refunded
             </p>
-            <p className="text-lg font-extrabold text-gray-900">৳0</p>
+            <p className="text-lg font-extrabold text-gray-900">$0</p>
           </div>
         </div>
       </div>
@@ -209,7 +209,7 @@ export default function TransactionsView({
                     </span>
                   </td>
                   <td className="px-6 py-4 font-bold text-gray-900">
-                    ৳{t.amount.toLocaleString()}
+                    ${t.amount.toLocaleString()}
                   </td>
                   <td className="px-6 py-4">
                     <span

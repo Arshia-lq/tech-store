@@ -207,7 +207,7 @@ export default function OrderTable({ orders: initialOrders }: { orders: OrderRow
 
                     <td className="px-6 py-4">
                       <p className="text-sm font-bold text-gray-900">
-                        ৳{order.totalPrice.toLocaleString()}
+                        ${order.totalPrice.toLocaleString()}
                       </p>
                       <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-600">
                         <CreditCard size={9} />
@@ -313,7 +313,7 @@ export default function OrderTable({ orders: initialOrders }: { orders: OrderRow
                         </div>
                       </div>
                       <p className="text-sm font-bold text-green-600">
-                        ৳{item.price.toLocaleString()}
+                        ${item.price.toLocaleString()}
                       </p>
                     </div>
                   ))}
@@ -367,7 +367,7 @@ export default function OrderTable({ orders: initialOrders }: { orders: OrderRow
                     Grand Total
                   </p>
                   <p className="text-xl font-bold text-white">
-                    ৳{selectedOrder.totalPrice.toLocaleString()}
+                    ${selectedOrder.totalPrice.toLocaleString()}
                   </p>
                 </div>
                 <span

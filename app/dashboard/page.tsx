@@ -53,7 +53,7 @@ export default async function DashboardOverviewPage() {
     },
     {
       label: "Node Revenue",
-      value: `৳${totalRevenue.toLocaleString()}`,
+      value: `$${totalRevenue.toLocaleString()}`,
       change: "+18%",
       icon: DollarSign,
       iconBg: "bg-purple-50",
@@ -188,7 +188,7 @@ export default async function DashboardOverviewPage() {
                       Order #{order.id}
                     </p>
                     <p className="text-xs font-medium text-gray-400">
-                      {order.customer} · ৳{order.amount.toLocaleString()}
+                      {order.customer} · ${order.amount.toLocaleString()}
                     </p>
                   </div>
                 </div>

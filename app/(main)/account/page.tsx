@@ -97,7 +97,7 @@ export default async function AccountPage() {
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
               Store Credit
             </p>
-            <p className="text-lg font-bold text-gray-900">৳{storeCredit}</p>
+            <p className="text-lg font-bold text-gray-900">${storeCredit}</p>
           </div>
           <div className="rounded-2xl border border-gray-100 px-5 py-3 text-center">
             <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-500">
@@ -177,7 +177,7 @@ export default async function AccountPage() {
 
                 <div className="text-right">
                   <p className="text-sm font-bold text-green-600">
-                    ৳{order.totalPrice.toLocaleString()}
+                    ${order.totalPrice.toLocaleString()}
                   </p>
                   <span
                     className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${statusPillColor(order.status)}`}

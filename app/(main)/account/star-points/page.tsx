@@ -68,7 +68,7 @@ export default function StarPointsPage() {
               </span>
               <h3 className="mt-4 text-base font-bold text-gray-900">Shop & Earn</h3>
               <p className="mt-1 text-xs text-gray-500">
-                Earn 5 points for every ৳100 spent on our platform.
+                Earn 5 points for every $100 spent on our platform.
               </p>
             </div>
           </div>

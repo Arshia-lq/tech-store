@@ -258,7 +258,7 @@ export default function ProductForm({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                  Special Price (৳)
+                  Special Price ($)
                 </label>
                 <input
                   type="number"
@@ -270,7 +270,7 @@ export default function ProductForm({
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                  Regular Price (৳)
+                  Regular Price ($)
                 </label>
                 <input
                   type="number"

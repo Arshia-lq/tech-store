@@ -4,13 +4,12 @@ const CategorySchema = new Schema(
   {
     name: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
-    icon: { type: String }, // Can be a URL (ImgBB) or a Lucide icon identifier
+    icon: { type: String },
     parent: { type: Schema.Types.ObjectId, ref: "Category", default: null },
   },
   { timestamps: true }
 );
 
-// Address potential Hot Module Replacement (HMR) issues
 if (models.Category && !models.Category.schema.path("slug")) {
   delete models.Category;
 }

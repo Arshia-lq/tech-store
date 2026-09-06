@@ -54,10 +54,19 @@ export async function PATCH(
 
     const updateData: any = {};
     if (transactionId !== undefined) updateData.transactionId = transactionId;
-    
+
     if (isAdmin) {
         if (status) updateData.status = status;
         if (paymentStatus) updateData.paymentStatus = paymentStatus;
+    } else if (
+      // Non-admin owners may only trigger this one specific transition:
+      // submitting proof of payment moves the order into review.
+      isOwner &&
+      transactionId &&
+      order.status === "Awaiting Payment" &&
+      status === "Awaiting Review"
+    ) {
+      updateData.status = "Awaiting Review";
     }
 
     const updatedOrder = await Order.findByIdAndUpdate(id, updateData, { new: true });

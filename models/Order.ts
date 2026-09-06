@@ -23,7 +23,7 @@ const OrderSchema = new Schema(
     },
     status: { 
       type: String, 
-      enum: ["Pending", "Awaiting Payment", "Processing", "Shipped", "Delivered", "Cancelled", "On Hold"], 
+      enum: ["Pending", "Awaiting Payment", "Awaiting Review", "Processing", "Shipped", "Delivered", "Cancelled", "On Hold"], 
       default: "Pending" 
     },
     paymentMethod: { type: String, required: true },

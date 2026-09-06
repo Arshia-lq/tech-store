@@ -8,7 +8,7 @@ import {
   Mail,
   Shield,
 } from "lucide-react";
-import UserActions from "./UserActions";
+import UserActions from "../UserActions";
 
 export default async function UsersPage() {
   const session = await getServerSession(authOptions);

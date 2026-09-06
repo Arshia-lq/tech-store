@@ -13,7 +13,15 @@ const ProductSchema = new Schema(
     brand: { type: String },
     modelName: { type: String },
     warranty: { type: String },
+    sku: { type: String }, // NEW — the "Code" shown on the product detail page
     specifications: { type: String },
+    keyFeatures: {
+      type: [{
+        label: { type: String, required: true },
+        value: { type: String, required: true },
+      },],
+      default: [],
+    }, // NEW — bullet list shown on the product detail page
     stock: { type: Number, default: 10 },
     reviews: [
       {
@@ -32,7 +40,7 @@ const ProductSchema = new Schema(
 );
 
 // Address potential Hot Module Replacement (HMR) issues by clearing the model if schema components are missing
-if (models.Product && !models.Product.schema.path("reviews")) {
+if (models.Product && !models.Product.schema.path("keyFeatures")) {
   delete models.Product;
 }
 

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // 2. Generate 6-digit numeric OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
@@ -33,14 +33,15 @@ export async function POST(req: Request) {
     // 4. Send verification email
     try {
       await sendVerificationEmail(email, otp);
-      console.log(`Registration OTP for ${email}: ${otp}`); // Server log for debugging
     } catch (emailError) {
       console.error("Email error:", emailError);
     }
 
-    return NextResponse.json({ 
+    console.log(`Registration OTP for ${email}: ${otp}`);
+
+    return NextResponse.json({
       message: "Registration successful! Please check your email for the verification code.",
-      email: email 
+      email: email
     }, { status: 201 });
   } catch (error) {
     console.error("Registration error:", error);

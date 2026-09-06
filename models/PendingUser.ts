@@ -6,7 +6,7 @@ const PendingUserSchema = new Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     otp: { type: String, required: true },
-    expiresAt: { type: Date, required: true, index: { expires: 0 } }, // TTL index
+    expiresAt: { type: Date, required: true, index: { expires: 0 } },
   },
   { timestamps: true }
 );
